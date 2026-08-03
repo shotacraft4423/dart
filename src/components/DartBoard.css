@@ -1,0 +1,19 @@
+.dartboard-svg {
+  width: 100%;
+  max-width: 380px;
+  aspect-ratio: 1 / 1;
+  cursor: crosshair;
+  user-select: none;
+  touch-action: none;
+}
+
+.dartboard-svg.dartboard-disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.dartboard-label {
+  fill: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
