@@ -1,0 +1,87 @@
+import { useEffect, useState } from 'react';
+import { usePlayer } from '../../context/PlayerContext';
+import { SkillCheckLayout } from '../../components/SkillCheckLayout';
+import { SessionComplete } from './SessionComplete';
+import { newSession, finishSession } from '../../lib/sessionStore';
+import { rate } from '../../lib/metrics';
+import type { DartThrow, SkillCheckMetrics, SkillCheckSession } from '../../types/domain';
+import type { BoardHitResult } from '../../lib/dartboardGeometry';
+
+const TARGETS = [...Array.from({ length: 20 }, (_, i) => i + 1), 25];
+
+export function AroundTheClock() {
+  const { player } = usePlayer();
+  const [session, setSession] = useState<SkillCheckSession | null>(null);
+  useEffect(() => {
+    if (player && !session) setSession(newSession(player.id, 'around_the_clock'));
+  }, [player, session]);
+  const [throws, setThrows] = useState<DartThrow[]>([]);
+  const [targetIndex, setTargetIndex] = useState(0);
+  const [attempts, setAttempts] = useState<number[]>([]);
+  const [currentAttempts, setCurrentAttempts] = useState(0);
+  const [metrics, setMetrics] = useState<SkillCheckMetrics | null>(null);
+
+  if (!player || !session) return <p>読み込み中...</p>;
+
+  const target = TARGETS[targetIndex];
+  const finished = targetIndex >= TARGETS.length;
+
+  async function handleHit(hit: BoardHitResult) {
+    if (finished) return;
+    const t: DartThrow = { ...hit, source: 'manual', timestamp: new Date().toISOString() };
+    const nextThrows = [...throws, t];
+    setThrows(nextThrows);
+
+    if (hit.segment === target && hit.segment !== 0) {
+      const nextAttempts = [...attempts, currentAttempts + 1];
+      setAttempts(nextAttempts);
+      setCurrentAttempts(0);
+      const nextIndex = targetIndex + 1;
+      setTargetIndex(nextIndex);
+      if (nextIndex >= TARGETS.length) {
+        const m: SkillCheckMetrics = {
+          dartsThrown: nextThrows.length,
+          hitRate: rate(TARGETS.length, nextThrows.length),
+        };
+        setMetrics(m);
+        await finishSession(session!, nextThrows, m);
+      }
+    } else {
+      setCurrentAttempts((n) => n + 1);
+    }
+  }
+
+  function restart() {
+    window.location.reload();
+  }
+
+  if (metrics) {
+    return <SessionComplete metrics={metrics} onRestart={restart} />;
+  }
+
+  return (
+    <SkillCheckLayout
+      title="Around the Clock"
+      instructions={`現在のターゲット: ${target === 25 ? 'ブル' : target} — 番号の順に1周狙いましょう（マルチプライヤーは問いません）`}
+      onHit={handleHit}
+      highlightSegment={{ segment: target }}
+      throws={throws}
+      statsPanel={
+        <div className="stat-grid">
+          <div className="stat-card">
+            <div className="stat-card-label">進捗</div>
+            <div className="stat-card-value">{targetIndex} / {TARGETS.length}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-label">総投擲数</div>
+            <div className="stat-card-value">{throws.length}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-label">現ターゲット試投数</div>
+            <div className="stat-card-value">{currentAttempts}</div>
+          </div>
+        </div>
+      }
+    />
+  );
+}
