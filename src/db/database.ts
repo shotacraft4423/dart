@@ -4,6 +4,7 @@ import type {
   ExternalRatingEntry,
   SkillCheckSession,
   RatingSnapshot,
+  FormAnalysisSession,
 } from '../types/domain';
 
 interface DartsDB extends DBSchema {
@@ -30,10 +31,15 @@ interface DartsDB extends DBSchema {
     key: string;
     value: unknown;
   };
+  formSessions: {
+    key: string;
+    value: FormAnalysisSession;
+    indexes: { 'by-player': string };
+  };
 }
 
 const DB_NAME = 'darts-practice-tool';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<DartsDB>> | null = null;
 
@@ -58,6 +64,10 @@ export function getDB(): Promise<IDBPDatabase<DartsDB>> {
         }
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings');
+        }
+        if (!db.objectStoreNames.contains('formSessions')) {
+          const store = db.createObjectStore('formSessions', { keyPath: 'id' });
+          store.createIndex('by-player', 'playerId');
         }
       },
     });
@@ -120,6 +130,19 @@ export const ratingSnapshotRepo = {
   },
   async put(snapshot: RatingSnapshot): Promise<void> {
     await (await getDB()).put('ratingSnapshots', snapshot);
+  },
+};
+
+export const formSessionRepo = {
+  async listByPlayer(playerId: string): Promise<FormAnalysisSession[]> {
+    const sessions = await (await getDB()).getAllFromIndex('formSessions', 'by-player', playerId);
+    return sessions.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  },
+  async put(session: FormAnalysisSession): Promise<void> {
+    await (await getDB()).put('formSessions', session);
+  },
+  async delete(id: string): Promise<void> {
+    await (await getDB()).delete('formSessions', id);
   },
 };
 
