@@ -12,6 +12,7 @@ import { RatingPage } from './features/rating/RatingPage';
 import { HistoryPage } from './features/history/HistoryPage';
 import { CameraLandingPage } from './features/camera/CameraLandingPage';
 import { FormCoachingPage } from './features/form/FormCoachingPage';
+import { BoardLabPage } from './features/boardlab/BoardLabPage';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/camera" element={<CameraLandingPage />} />
             <Route path="/form" element={<FormCoachingPage />} />
+            <Route path="/board-lab" element={<BoardLabPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
