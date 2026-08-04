@@ -2,15 +2,8 @@ import { useEffect, useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { skillCheckSessionRepo } from '../../db/database';
 import { refreshRatingSnapshot } from '../../lib/rating';
-import type { SkillCheckSession, SkillCheckType } from '../../types/domain';
-
-const TYPE_LABELS: Record<SkillCheckType, string> = {
-  around_the_clock: 'Around the Clock',
-  bobs_27: "Bob's 27",
-  cricket_count_up: 'Cricket Count-up',
-  game01: '01ゲーム',
-  grouping: 'グルーピングテスト',
-};
+import { SKILL_CHECK_META } from '../../lib/skillCheckMeta';
+import type { SkillCheckSession } from '../../types/domain';
 
 function summarize(session: SkillCheckSession): string {
   const m = session.metrics;
@@ -57,7 +50,7 @@ export function HistoryPage() {
             {sessions.map((s) => (
               <tr key={s.id}>
                 <td>{new Date(s.startedAt).toLocaleString('ja-JP')}</td>
-                <td>{TYPE_LABELS[s.type]}</td>
+                <td>{SKILL_CHECK_META[s.type].label}</td>
                 <td>{summarize(s)}</td>
                 <td><button className="btn-link" onClick={() => handleDelete(s.id)}>削除</button></td>
               </tr>
