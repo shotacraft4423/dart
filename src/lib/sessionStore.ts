@@ -1,7 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import type { DartThrow, SkillCheckMetrics, SkillCheckSession, SkillCheckType } from '../types/domain';
 import { skillCheckSessionRepo } from '../db/database';
-import { refreshRatingSnapshot } from './rating';
 
 export function newSession(
   playerId: string,
@@ -31,5 +30,4 @@ export async function finishSession(
     finishedAt: new Date().toISOString(),
   };
   await skillCheckSessionRepo.put(finished);
-  await refreshRatingSnapshot(session.playerId);
 }

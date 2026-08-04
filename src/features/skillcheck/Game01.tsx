@@ -6,17 +6,49 @@ import { newSession, finishSession } from '../../lib/sessionStore';
 import type { DartThrow, SkillCheckMetrics, SkillCheckSession } from '../../types/domain';
 import type { BoardHitResult } from '../../lib/dartboardGeometry';
 
-type TurnThrow = DartThrow & { bust?: boolean };
+interface Game01Config {
+  startScore: 301 | 501;
+  doubleOut: boolean;
+}
+
+function replay(throws: DartThrow[], config: Game01Config) {
+  let remaining: number = config.startScore;
+  let bustCount = 0;
+  let turnThrows: DartThrow[] = [];
+  let status: 'playing' | 'won' = 'playing';
+
+  for (const t of throws) {
+    if (status === 'won') break;
+    const newRemaining = remaining - t.score;
+    const isBust =
+      newRemaining < 0 ||
+      (config.doubleOut && newRemaining === 1) ||
+      (newRemaining === 0 && config.doubleOut && t.multiplier !== 2);
+    const isWin = newRemaining === 0 && !isBust;
+
+    if (isBust) {
+      bustCount++;
+      turnThrows = [];
+      continue;
+    }
+    if (isWin) {
+      remaining = 0;
+      status = 'won';
+      continue;
+    }
+    remaining = newRemaining;
+    turnThrows = [...turnThrows, t];
+    if (turnThrows.length >= 3) turnThrows = [];
+  }
+
+  return { remaining, bustCount, turnThrows, status };
+}
 
 export function Game01() {
   const { player } = usePlayer();
-  const [config, setConfig] = useState<{ startScore: 301 | 501; doubleOut: boolean } | null>(null);
+  const [config, setConfig] = useState<Game01Config | null>(null);
   const [session, setSession] = useState<SkillCheckSession | null>(null);
-  const [throws, setThrows] = useState<TurnThrow[]>([]);
-  const [turnThrows, setTurnThrows] = useState<DartThrow[]>([]);
-  const [remaining, setRemaining] = useState(0);
-  const [bustCount, setBustCount] = useState(0);
-  const [status, setStatus] = useState<'playing' | 'won'>('playing');
+  const [throws, setThrows] = useState<DartThrow[]>([]);
   const [metrics, setMetrics] = useState<SkillCheckMetrics | null>(null);
 
   if (!player) return <p>読み込み中...</p>;
@@ -25,7 +57,7 @@ export function Game01() {
     return (
       <div className="skillcheck-layout">
         <div className="skillcheck-header">
-          <h2>01ゲーム（レーティング測定）</h2>
+          <h2>01ゲーム(レーティング測定)</h2>
           <p className="skillcheck-instructions">開始スコアとルールを選んでください</p>
         </div>
         <div className="game01-setup">
@@ -34,10 +66,9 @@ export function Game01() {
               key={s}
               className="btn-secondary"
               onClick={() => {
-                const cfg = { startScore: s as 301 | 501, doubleOut: true };
+                const cfg: Game01Config = { startScore: s as 301 | 501, doubleOut: true };
                 setConfig(cfg);
-                setRemaining(s);
-                setSession(newSession(player.id, 'game01', cfg));
+                setSession(newSession(player.id, 'game01', cfg as unknown as Record<string, unknown>));
               }}
             >
               {s} ダブルアウト
@@ -48,42 +79,29 @@ export function Game01() {
     );
   }
 
+  const { remaining, bustCount, turnThrows, status } = replay(throws, config);
+
   async function handleHit(hit: BoardHitResult) {
     if (status !== 'playing' || !session) return;
     const t: DartThrow = { ...hit, source: 'manual', timestamp: new Date().toISOString() };
-    const newRemaining = remaining - hit.score;
-    const isBust =
-      newRemaining < 0 ||
-      (config!.doubleOut && newRemaining === 1) ||
-      (newRemaining === 0 && config!.doubleOut && hit.multiplier !== 2);
-    const isWin = newRemaining === 0 && !isBust;
-
-    const nextThrows: TurnThrow[] = [...throws, { ...t, bust: isBust }];
+    const nextThrows = [...throws, t];
     setThrows(nextThrows);
 
-    if (isBust) {
-      setBustCount((n) => n + 1);
-      setTurnThrows([]);
-      return;
-    }
-
-    if (isWin) {
-      setRemaining(0);
-      setStatus('won');
+    const next = replay(nextThrows, config!);
+    if (next.status === 'won') {
       const m: SkillCheckMetrics = {
         dartsThrown: nextThrows.length,
-        threeDartAverage: ((config!.startScore - 0) / nextThrows.length) * 3,
-        bustCount,
+        threeDartAverage: (config!.startScore / nextThrows.length) * 3,
+        bustCount: next.bustCount,
         checkoutRate: 1,
       };
       setMetrics(m);
       await finishSession(session, nextThrows, m);
-      return;
     }
+  }
 
-    setRemaining(newRemaining);
-    const nextTurnThrows = [...turnThrows, t];
-    setTurnThrows(nextTurnThrows.length >= 3 ? [] : nextTurnThrows);
+  function handleUndo() {
+    setThrows((prev) => prev.slice(0, -1));
   }
 
   async function endEarly() {
@@ -113,6 +131,7 @@ export function Game01() {
       instructions={`残り: ${remaining} — ${config.doubleOut ? 'ダブルでフィニッシュしてください' : ''}`}
       onHit={handleHit}
       throws={throws}
+      onUndo={handleUndo}
       statsPanel={
         <div className="stat-grid">
           <div className="stat-card">

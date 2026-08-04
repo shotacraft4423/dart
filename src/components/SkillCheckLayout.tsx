@@ -14,6 +14,7 @@ interface SkillCheckLayoutProps {
   throws: DartThrow[];
   statsPanel: ReactNode;
   footer?: ReactNode;
+  onUndo?: () => void;
 }
 
 export function SkillCheckLayout({
@@ -26,6 +27,7 @@ export function SkillCheckLayout({
   throws,
   statsPanel,
   footer,
+  onUndo,
 }: SkillCheckLayoutProps) {
   return (
     <div className="skillcheck-layout">
@@ -40,7 +42,14 @@ export function SkillCheckLayout({
         <div className="skillcheck-side">
           {statsPanel}
           <div className="throw-log-panel">
-            <h3>投擲履歴</h3>
+            <div className="throw-log-header">
+              <h3>投擲履歴</h3>
+              {onUndo && (
+                <button className="btn-link" onClick={onUndo} disabled={throws.length === 0}>
+                  1つ前に戻す
+                </button>
+              )}
+            </div>
             <ThrowLog throws={throws} />
           </div>
         </div>

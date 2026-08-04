@@ -1,6 +1,4 @@
-import type { SkillCheckSession, SkillCheckType } from '../types/domain';
-import { skillCheckSessionRepo, externalRatingRepo, ratingSnapshotRepo } from '../db/database';
-import { v4 as uuid } from 'uuid';
+import type { ExternalRatingEntry, RatingSnapshot, SkillCheckSession, SkillCheckType } from '../types/domain';
 
 function latestOfType(sessions: SkillCheckSession[], type: SkillCheckType): SkillCheckSession | undefined {
   return sessions.find((s) => s.type === type && s.finishedAt);
@@ -52,24 +50,38 @@ export function computeInternalRating(sessions: SkillCheckSession[]): number | n
   return Math.round((1 + weightedScore * 19) * 100) / 100;
 }
 
-export async function refreshRatingSnapshot(playerId: string): Promise<void> {
-  const [sessions, externalRatings] = await Promise.all([
-    skillCheckSessionRepo.listByPlayer(playerId),
-    externalRatingRepo.listByPlayer(playerId),
-  ]);
+/**
+ * Builds the rating-over-time series directly from current sessions/external
+ * ratings rather than a persisted log, so deleting a session or a rating
+ * entry immediately and correctly disappears from the chart too instead of
+ * leaving a stale historical point behind.
+ */
+export function buildRatingHistory(
+  playerId: string,
+  sessions: SkillCheckSession[],
+  externalRatings: ExternalRatingEntry[],
+): RatingSnapshot[] {
+  const finishedSessions = [...sessions]
+    .filter((s): s is SkillCheckSession & { finishedAt: string } => Boolean(s.finishedAt))
+    .sort((a, b) => a.finishedAt.localeCompare(b.finishedAt));
+  const sortedExternal = [...externalRatings].sort((a, b) => a.date.localeCompare(b.date));
 
-  const internalRating = computeInternalRating(sessions);
+  const eventDates = [...new Set([...finishedSessions.map((s) => s.finishedAt), ...sortedExternal.map((e) => e.date)])].sort(
+    (a, b) => a.localeCompare(b),
+  );
 
-  const latestBySystem = new Map<string, number>();
-  for (const entry of [...externalRatings].sort((a, b) => a.date.localeCompare(b.date))) {
-    latestBySystem.set(entry.system, entry.value);
-  }
+  return eventDates.map((date, i) => {
+    const sessionsUpToDate = finishedSessions.filter((s) => s.finishedAt <= date);
+    const externalUpToDate = sortedExternal.filter((e) => e.date <= date);
+    const latestBySystem = new Map<string, number>();
+    for (const entry of externalUpToDate) latestBySystem.set(entry.system, entry.value);
 
-  await ratingSnapshotRepo.put({
-    id: uuid(),
-    playerId,
-    date: new Date().toISOString(),
-    internalRating,
-    externalRatings: [...latestBySystem.entries()].map(([system, value]) => ({ system, value })),
+    return {
+      id: `derived-${i}`,
+      playerId,
+      date,
+      internalRating: computeInternalRating(sessionsUpToDate),
+      externalRatings: [...latestBySystem.entries()].map(([system, value]) => ({ system, value })),
+    };
   });
 }

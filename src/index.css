@@ -291,6 +291,22 @@ button {
   padding: 0;
 }
 
+.btn-link:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.throw-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.throw-log-header h3 {
+  margin: 0;
+}
+
 .recent-list {
   margin: 0;
   padding-left: 18px;
@@ -319,8 +335,8 @@ button {
 }
 
 .skillcheck-board {
-  flex: 1 1 340px;
-  max-width: 400px;
+  flex: 1 1 400px;
+  max-width: 480px;
   background: var(--surface);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;

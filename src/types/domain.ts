@@ -80,7 +80,6 @@ export interface RatingSnapshot {
   date: string;
   internalRating: number | null;
   externalRatings: { system: string; value: number }[];
-  sourceSessionId?: string;
 }
 
 /** Per-throw form metrics derived from pose landmarks. Raw video/landmark

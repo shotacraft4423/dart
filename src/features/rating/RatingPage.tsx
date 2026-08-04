@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { usePlayer } from '../../context/PlayerContext';
-import { externalRatingRepo, ratingSnapshotRepo } from '../../db/database';
-import { refreshRatingSnapshot } from '../../lib/rating';
+import { externalRatingRepo, skillCheckSessionRepo } from '../../db/database';
+import { buildRatingHistory } from '../../lib/rating';
 import { RatingChart } from '../../components/RatingChart';
 import type { ExternalRatingEntry, RatingSnapshot } from '../../types/domain';
 
@@ -11,19 +11,19 @@ const SYSTEM_PRESETS = ['DARTSLIVE', 'BA'];
 export function RatingPage() {
   const { player } = usePlayer();
   const [entries, setEntries] = useState<ExternalRatingEntry[]>([]);
-  const [snapshots, setSnapshots] = useState<RatingSnapshot[]>([]);
+  const [history, setHistory] = useState<RatingSnapshot[]>([]);
   const [system, setSystem] = useState(SYSTEM_PRESETS[0]);
   const [customSystem, setCustomSystem] = useState('');
   const [value, setValue] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   async function reload(playerId: string) {
-    const [e, s] = await Promise.all([
+    const [e, sessions] = await Promise.all([
       externalRatingRepo.listByPlayer(playerId),
-      ratingSnapshotRepo.listByPlayer(playerId),
+      skillCheckSessionRepo.listByPlayer(playerId),
     ]);
     setEntries(e.sort((a, b) => b.date.localeCompare(a.date)));
-    setSnapshots(s);
+    setHistory(buildRatingHistory(playerId, sessions, e));
   }
 
   useEffect(() => {
@@ -46,35 +46,33 @@ export function RatingPage() {
       value: numValue,
       date: new Date(date).toISOString(),
     });
-    await refreshRatingSnapshot(player!.id);
     setValue('');
     await reload(player!.id);
   }
 
   async function handleDelete(id: string) {
     await externalRatingRepo.delete(id);
-    await refreshRatingSnapshot(player!.id);
     await reload(player!.id);
   }
 
-  const latestInternal = snapshots.length > 0 ? snapshots[snapshots.length - 1].internalRating : null;
+  const latestInternal = history.length > 0 ? history[history.length - 1].internalRating : null;
 
   return (
     <div className="page">
       <h2>レーティング管理</h2>
-      <p className="page-lead">外部レーティング（DARTSLIVE・BA等）を手動入力し、スキルチェックから算出した内部レーティングと比較できます。</p>
+      <p className="page-lead">外部レーティング(DARTSLIVE・BA等)を手動入力し、スキルチェックから算出した内部レーティングと比較できます。</p>
 
       <div className="rating-summary">
         <div className="stat-card">
           <div className="stat-card-label">現在の内部レーティング</div>
           <div className="stat-card-value">{latestInternal !== null && latestInternal !== undefined ? latestInternal.toFixed(2) : '—'}</div>
-          <div className="stat-card-hint">スキルチェックの結果から自動算出（参考値）</div>
+          <div className="stat-card-hint">スキルチェックの結果から自動算出(参考値)</div>
         </div>
       </div>
 
       <section className="card">
         <h3>レーティング推移</h3>
-        <RatingChart snapshots={snapshots} />
+        <RatingChart snapshots={history} />
       </section>
 
       <section className="card">
@@ -86,7 +84,7 @@ export function RatingPage() {
               {SYSTEM_PRESETS.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
-              <option value="__custom">その他（自由入力）</option>
+              <option value="__custom">その他(自由入力)</option>
             </select>
           </label>
           {system === '__custom' && (

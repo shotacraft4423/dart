@@ -1,26 +1,27 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePlayer } from '../../context/PlayerContext';
-import { skillCheckSessionRepo, ratingSnapshotRepo } from '../../db/database';
+import { skillCheckSessionRepo, externalRatingRepo } from '../../db/database';
 import { RatingChart } from '../../components/RatingChart';
 import { boardAdapterRegistry } from '../../adapters/boardAdapter';
 import { buildDailyMenu, type DrillSuggestion } from '../../lib/recommendation';
+import { buildRatingHistory } from '../../lib/rating';
 import type { RatingSnapshot, SkillCheckSession } from '../../types/domain';
 
 export function DashboardPage() {
   const { player } = usePlayer();
-  const [snapshots, setSnapshots] = useState<RatingSnapshot[]>([]);
+  const [history, setHistory] = useState<RatingSnapshot[]>([]);
   const [recentSessions, setRecentSessions] = useState<SkillCheckSession[]>([]);
   const [dailyMenu, setDailyMenu] = useState<DrillSuggestion[]>([]);
 
   useEffect(() => {
     if (!player) return;
     (async () => {
-      const [s, sessions] = await Promise.all([
-        ratingSnapshotRepo.listByPlayer(player.id),
+      const [sessions, externalRatings] = await Promise.all([
         skillCheckSessionRepo.listByPlayer(player.id),
+        externalRatingRepo.listByPlayer(player.id),
       ]);
-      setSnapshots(s);
+      setHistory(buildRatingHistory(player.id, sessions, externalRatings));
       setRecentSessions(sessions.slice(0, 5));
       setDailyMenu(buildDailyMenu(sessions));
     })();
@@ -28,7 +29,7 @@ export function DashboardPage() {
 
   if (!player) return <p>読み込み中...</p>;
 
-  const latest = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
+  const latest = history.length > 0 ? history[history.length - 1] : null;
 
   return (
     <div className="page">
@@ -72,7 +73,7 @@ export function DashboardPage() {
 
       <section className="card">
         <h3>レーティング推移</h3>
-        <RatingChart snapshots={snapshots} />
+        <RatingChart snapshots={history} />
       </section>
 
       <section className="card">

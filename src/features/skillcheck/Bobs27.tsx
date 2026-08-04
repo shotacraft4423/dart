@@ -10,6 +10,31 @@ import type { BoardHitResult } from '../../lib/dartboardGeometry';
 const NUMBERS = Array.from({ length: 20 }, (_, i) => i + 1);
 const DARTS_PER_NUMBER = 3;
 
+function replay(throws: DartThrow[]) {
+  let score = 27;
+  let totalDoubleHits = 0;
+  let numberIndex = 0;
+  let dartsThisNumber = 0;
+  let doubleHitsThisNumber = 0;
+
+  for (const t of throws) {
+    if (numberIndex >= NUMBERS.length) break;
+    const target = NUMBERS[numberIndex];
+    if (t.segment === target && t.multiplier === 2) doubleHitsThisNumber++;
+    dartsThisNumber++;
+
+    if (dartsThisNumber >= DARTS_PER_NUMBER) {
+      score += doubleHitsThisNumber > 0 ? target * 2 * doubleHitsThisNumber : -target;
+      totalDoubleHits += doubleHitsThisNumber;
+      numberIndex++;
+      dartsThisNumber = 0;
+      doubleHitsThisNumber = 0;
+    }
+  }
+
+  return { score, totalDoubleHits, numberIndex, dartsThisNumber, doubleHitsThisNumber };
+}
+
 export function Bobs27() {
   const { player } = usePlayer();
   const [session, setSession] = useState<SkillCheckSession | null>(null);
@@ -17,15 +42,11 @@ export function Bobs27() {
     if (player && !session) setSession(newSession(player.id, 'bobs_27'));
   }, [player, session]);
   const [throws, setThrows] = useState<DartThrow[]>([]);
-  const [numberIndex, setNumberIndex] = useState(0);
-  const [dartsThisNumber, setDartsThisNumber] = useState(0);
-  const [doubleHitsThisNumber, setDoubleHitsThisNumber] = useState(0);
-  const [score, setScore] = useState(27);
-  const [totalDoubleHits, setTotalDoubleHits] = useState(0);
   const [metrics, setMetrics] = useState<SkillCheckMetrics | null>(null);
 
   if (!player || !session) return <p>読み込み中...</p>;
 
+  const { score, numberIndex, dartsThisNumber } = replay(throws);
   const finished = numberIndex >= NUMBERS.length;
   const target = NUMBERS[numberIndex];
 
@@ -35,34 +56,20 @@ export function Bobs27() {
     const nextThrows = [...throws, t];
     setThrows(nextThrows);
 
-    const isDoubleHit = hit.segment === target && hit.multiplier === 2;
-    const nextDoubleHits = doubleHitsThisNumber + (isDoubleHit ? 1 : 0);
-    const nextDartsThisNumber = dartsThisNumber + 1;
-
-    if (nextDartsThisNumber < DARTS_PER_NUMBER) {
-      setDartsThisNumber(nextDartsThisNumber);
-      setDoubleHitsThisNumber(nextDoubleHits);
-      return;
-    }
-
-    const nextScore = nextDoubleHits > 0 ? score + target * 2 * nextDoubleHits : score - target;
-    const nextTotalDoubleHits = totalDoubleHits + nextDoubleHits;
-    setScore(nextScore);
-    setTotalDoubleHits(nextTotalDoubleHits);
-    setDartsThisNumber(0);
-    setDoubleHitsThisNumber(0);
-    const nextIndex = numberIndex + 1;
-    setNumberIndex(nextIndex);
-
-    if (nextIndex >= NUMBERS.length) {
+    const next = replay(nextThrows);
+    if (next.numberIndex >= NUMBERS.length) {
       const m: SkillCheckMetrics = {
-        totalScore: nextScore,
+        totalScore: next.score,
         dartsThrown: nextThrows.length,
-        doubleSuccessRate: rate(nextTotalDoubleHits, NUMBERS.length * DARTS_PER_NUMBER),
+        doubleSuccessRate: rate(next.totalDoubleHits, NUMBERS.length * DARTS_PER_NUMBER),
       };
       setMetrics(m);
       await finishSession(session!, nextThrows, m);
     }
+  }
+
+  function handleUndo() {
+    setThrows((prev) => prev.slice(0, -1));
   }
 
   function restart() {
@@ -80,6 +87,7 @@ export function Bobs27() {
       onHit={handleHit}
       highlightSegment={{ segment: target, multiplier: 2 }}
       throws={throws}
+      onUndo={handleUndo}
       statsPanel={
         <div className="stat-grid">
           <div className="stat-card">
