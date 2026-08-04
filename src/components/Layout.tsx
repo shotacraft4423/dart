@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { to: '/skillcheck', label: 'スキルチェック' },
   { to: '/rating', label: 'レーティング' },
   { to: '/history', label: '履歴' },
+  { to: '/camera', label: 'カメラ解析' },
 ];
 
 export function Layout() {

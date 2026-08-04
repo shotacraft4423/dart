@@ -4,12 +4,14 @@ import { usePlayer } from '../../context/PlayerContext';
 import { skillCheckSessionRepo, ratingSnapshotRepo } from '../../db/database';
 import { RatingChart } from '../../components/RatingChart';
 import { boardAdapterRegistry } from '../../adapters/boardAdapter';
+import { buildDailyMenu, type DrillSuggestion } from '../../lib/recommendation';
 import type { RatingSnapshot, SkillCheckSession } from '../../types/domain';
 
 export function DashboardPage() {
   const { player } = usePlayer();
   const [snapshots, setSnapshots] = useState<RatingSnapshot[]>([]);
   const [recentSessions, setRecentSessions] = useState<SkillCheckSession[]>([]);
+  const [dailyMenu, setDailyMenu] = useState<DrillSuggestion[]>([]);
 
   useEffect(() => {
     if (!player) return;
@@ -20,6 +22,7 @@ export function DashboardPage() {
       ]);
       setSnapshots(s);
       setRecentSessions(sessions.slice(0, 5));
+      setDailyMenu(buildDailyMenu(sessions));
     })();
   }, [player]);
 
@@ -51,6 +54,23 @@ export function DashboardPage() {
       </div>
 
       <section className="card">
+        <h3>今日の練習メニュー</h3>
+        {dailyMenu.length === 0 ? (
+          <p className="page-lead">読み込み中...</p>
+        ) : (
+          <div className="menu-list">
+            {dailyMenu.map((drill) => (
+              <Link key={drill.skillCheckType} to={drill.path} className="menu-item">
+                <div className="menu-item-title">{drill.title}</div>
+                <p className="menu-item-reason">{drill.reason}</p>
+                <div className="menu-item-target">{drill.targetHint}</div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card">
         <h3>レーティング推移</h3>
         <RatingChart snapshots={snapshots} />
       </section>
@@ -61,6 +81,7 @@ export function DashboardPage() {
           <Link to="/skillcheck" className="btn-primary">スキルチェックを始める</Link>
           <Link to="/rating" className="btn-secondary">レーティングを入力</Link>
           <Link to="/history" className="btn-secondary">履歴を見る</Link>
+          <Link to="/camera" className="btn-secondary">カメラで着弾点解析</Link>
         </div>
       </section>
 
