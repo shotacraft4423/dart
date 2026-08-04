@@ -14,12 +14,40 @@ import type { FormAnalysisSession } from '../../types/domain';
 // Both the WASM runtime and the pose model are served locally (see
 // public/mediapipe/) rather than from Google's CDN, so form analysis works
 // fully offline after the initial page load and doesn't depend on external
-// CDN availability.
-const MODEL_URL = '/mediapipe/models/pose_landmarker_lite.task';
+// CDN availability. Using the "full" tier (not "lite") for better landmark
+// accuracy — worth the larger download for a coaching tool that isn't
+// latency-critical.
+const MODEL_URL = '/mediapipe/models/pose_landmarker_full.task';
 const WASM_BASE_URL = '/mediapipe/wasm';
 
-// BlazePose 33-point indices for the joints we track.
-const LM = { leftShoulder: 11, rightShoulder: 12, leftElbow: 13, rightElbow: 14, leftWrist: 15, rightWrist: 16 } as const;
+// BlazePose 33-point indices. Shoulders/elbows/wrists/hips feed the actual
+// form analysis (in 3D world coordinates); knees/ankles are drawn for a
+// complete full-body skeleton but aren't otherwise analyzed.
+const LM = {
+  leftShoulder: 11,
+  rightShoulder: 12,
+  leftElbow: 13,
+  rightElbow: 14,
+  leftWrist: 15,
+  rightWrist: 16,
+  leftHip: 23,
+  rightHip: 24,
+  leftKnee: 25,
+  rightKnee: 26,
+  leftAnkle: 27,
+  rightAnkle: 28,
+} as const;
+
+const ANALYZED_LANDMARKS = [
+  LM.leftShoulder,
+  LM.rightShoulder,
+  LM.leftElbow,
+  LM.rightElbow,
+  LM.leftWrist,
+  LM.rightWrist,
+  LM.leftHip,
+  LM.rightHip,
+] as const;
 
 const SKELETON_LINKS: [keyof typeof LM, keyof typeof LM][] = [
   ['leftShoulder', 'rightShoulder'],
@@ -27,6 +55,13 @@ const SKELETON_LINKS: [keyof typeof LM, keyof typeof LM][] = [
   ['leftElbow', 'leftWrist'],
   ['rightShoulder', 'rightElbow'],
   ['rightElbow', 'rightWrist'],
+  ['leftShoulder', 'leftHip'],
+  ['rightShoulder', 'rightHip'],
+  ['leftHip', 'rightHip'],
+  ['leftHip', 'leftKnee'],
+  ['leftKnee', 'leftAnkle'],
+  ['rightHip', 'rightKnee'],
+  ['rightKnee', 'rightAnkle'],
 ];
 
 type CameraState = 'checking' | 'unavailable' | 'live';
@@ -51,11 +86,14 @@ export function FormCoachingPage() {
   const [lastThrowNote, setLastThrowNote] = useState('');
   const [saved, setSaved] = useState(false);
 
-  // Camera setup
+  // Camera setup. A wider/taller ideal resolution than a typical webcam
+  // default helps keep enough resolution on each joint once the user backs
+  // up far enough for the whole body (needed now that hips are tracked) to
+  // fit in frame.
   useEffect(() => {
     let cancelled = false;
     navigator.mediaDevices
-      ?.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } } })
+      ?.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } })
       .then((stream) => {
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
@@ -135,16 +173,25 @@ export function FormCoachingPage() {
         const result: PoseLandmarkerResult = landmarker.detectForVideo(video, performance.now());
         drawSkeleton(canvas, result);
 
-        if (recordingRef.current && result.landmarks[0]) {
-          const lm = result.landmarks[0];
+        // Image-space landmarks drive the on-screen skeleton (they align
+        // with video pixels); world landmarks (real-world meters, roughly
+        // hip-centered) drive the actual analysis below since they stay
+        // consistent regardless of the camera's viewing angle.
+        const lm2d = result.landmarks[0];
+        const world = result.worldLandmarks[0];
+        if (recordingRef.current && lm2d && world) {
+          const minVisibility = Math.min(...ANALYZED_LANDMARKS.map((i) => lm2d[i]?.visibility ?? 0));
           framesRef.current.push({
             t: performance.now() - recordingStartRef.current,
-            leftShoulder: lm[LM.leftShoulder],
-            rightShoulder: lm[LM.rightShoulder],
-            leftElbow: lm[LM.leftElbow],
-            rightElbow: lm[LM.rightElbow],
-            leftWrist: lm[LM.leftWrist],
-            rightWrist: lm[LM.rightWrist],
+            minVisibility,
+            leftShoulder: world[LM.leftShoulder],
+            rightShoulder: world[LM.rightShoulder],
+            leftElbow: world[LM.leftElbow],
+            rightElbow: world[LM.rightElbow],
+            leftWrist: world[LM.leftWrist],
+            rightWrist: world[LM.rightWrist],
+            leftHip: world[LM.leftHip],
+            rightHip: world[LM.rightHip],
           });
         }
       }
@@ -170,6 +217,7 @@ export function FormCoachingPage() {
     for (const [a, b] of SKELETON_LINKS) {
       const pa = lm[LM[a]];
       const pb = lm[LM[b]];
+      if (!pa || !pb) continue;
       ctx.beginPath();
       ctx.moveTo(pa.x * canvas.width, pa.y * canvas.height);
       ctx.lineTo(pb.x * canvas.width, pb.y * canvas.height);
@@ -178,6 +226,7 @@ export function FormCoachingPage() {
     ctx.fillStyle = '#ffd23f';
     for (const key of Object.values(LM)) {
       const p = lm[key];
+      if (!p) continue;
       ctx.beginPath();
       ctx.arc(p.x * canvas.width, p.y * canvas.height, 5, 0, Math.PI * 2);
       ctx.fill();
@@ -196,7 +245,9 @@ export function FormCoachingPage() {
       setIsRecording(false);
       const metrics = computeThrowMetrics(framesRef.current);
       if (!metrics) {
-        setLastThrowNote('記録が短すぎて解析できませんでした。テイクバックからフォロースルーまで数秒間記録してください。');
+        setLastThrowNote(
+          '記録が短すぎるか、体の一部が映っていない/隠れているため解析できませんでした。全身がカメラに映る位置でテイクバックからフォロースルーまで記録してください。',
+        );
         return;
       }
       setThrows((prev) => [...prev, metrics]);
@@ -220,7 +271,8 @@ export function FormCoachingPage() {
         throwingArm: t.throwingArm,
         elbowAngleAtReleaseDeg: t.elbowAngleAtReleaseDeg,
         wristJerkIndex: t.wristJerkIndex,
-        shoulderSwayNormalized: t.shoulderSwayNormalized,
+        shoulderSwayMeters: t.shoulderSwayMeters,
+        hipSwayMeters: t.hipSwayMeters,
       })),
       consistency: consistency ?? undefined,
       tips,
@@ -233,7 +285,7 @@ export function FormCoachingPage() {
     <div className="page">
       <h2>フォーム解析・コーチング</h2>
       <p className="page-lead">
-        カメラに投球動作(テイクバック〜フォロースルー)が映るように立ち、「記録開始」→投球→「記録終了」を繰り返してください。リリース時の肘の角度・動きの滑らかさ・上半身のブレから安定性を評価します。映像はブラウザ内でのみ処理され、保存されるのは数値の要約のみです。
+        全身(肩から腰)がカメラに映る位置に立ち、「記録開始」→投球→「記録終了」を繰り返してください。MediaPipeの3D姿勢推定(ワールド座標)を使って解析するため、正面・横・斜めなどカメラの角度が変わっても、肘の角度や体のブレは同じ基準で評価されます。リリース時の肘の角度・動きの滑らかさ・上半身/下半身のブレから安定性を評価します。映像はブラウザ内でのみ処理され、保存されるのは数値の要約のみです。
       </p>
 
       {cameraState === 'unavailable' && <p className="camera-warning">カメラを利用できませんでした(権限が拒否されたか、非対応の環境です)。</p>}
