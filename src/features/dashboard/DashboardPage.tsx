@@ -82,6 +82,7 @@ export function DashboardPage() {
           <Link to="/rating" className="btn-secondary">レーティングを入力</Link>
           <Link to="/history" className="btn-secondary">履歴を見る</Link>
           <Link to="/camera" className="btn-secondary">カメラで着弾点解析</Link>
+          <Link to="/form" className="btn-secondary">フォーム解析・コーチング</Link>
         </div>
       </section>
 

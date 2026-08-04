@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { to: '/rating', label: 'レーティング' },
   { to: '/history', label: '履歴' },
   { to: '/camera', label: 'カメラ解析' },
+  { to: '/form', label: 'フォーム解析' },
 ];
 
 export function Layout() {

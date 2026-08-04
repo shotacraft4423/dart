@@ -82,3 +82,27 @@ export interface RatingSnapshot {
   externalRatings: { system: string; value: number }[];
   sourceSessionId?: string;
 }
+
+/** Per-throw form metrics derived from pose landmarks. Raw video/landmark
+ * frames are never persisted, only these small numeric summaries. */
+export interface FormThrowRecord {
+  throwingArm: 'left' | 'right';
+  elbowAngleAtReleaseDeg: number;
+  wristJerkIndex: number;
+  shoulderSwayNormalized: number;
+}
+
+export interface FormAnalysisSession {
+  id: string;
+  playerId: string;
+  startedAt: string;
+  finishedAt?: string;
+  throws: FormThrowRecord[];
+  consistency?: {
+    elbowAngleStdDeg: number;
+    jerkIndexAvg: number;
+    shoulderSwayAvg: number;
+    stabilityScore: number;
+  };
+  tips: string[];
+}
