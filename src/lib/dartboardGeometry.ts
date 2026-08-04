@@ -1,27 +1,24 @@
-// Standard steel-tip dartboard proportions (mm), used to translate a click
-// position into a segment/ring so the on-screen board can double as both a
-// manual scorer and (in later phases) a stand-in for detected landing
-// coordinates from camera analysis.
+// Ring boundaries used to translate a click position into a segment/ring so
+// the on-screen board can double as both a manual scorer and (in later
+// phases) a stand-in for detected landing coordinates from camera analysis.
+//
+// These are deliberately NOT to-scale with a real board: a real double/
+// triple ring is only ~4.7% of the board radius wide, which is too thin to
+// click or tap reliably on screen. The bands below are widened for
+// usability (this is a scoring input, not an aim-precision test) while
+// staying visually plausible and keeping every boundary monotonically
+// increasing from center to rim.
 
 export const SEGMENT_ORDER = [
   20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5,
 ] as const;
 
-const MM = {
-  bullseye: 6.35,
-  outerBull: 15.9,
-  tripleInner: 99,
-  tripleOuter: 107,
-  doubleInner: 162,
-  doubleOuter: 170,
-};
-
 export const RADIUS_RATIO = {
-  bullseye: MM.bullseye / MM.doubleOuter,
-  outerBull: MM.outerBull / MM.doubleOuter,
-  tripleInner: MM.tripleInner / MM.doubleOuter,
-  tripleOuter: MM.tripleOuter / MM.doubleOuter,
-  doubleInner: MM.doubleInner / MM.doubleOuter,
+  bullseye: 0.07,
+  outerBull: 0.16,
+  tripleInner: 0.5,
+  tripleOuter: 0.62,
+  doubleInner: 0.84,
   doubleOuter: 1,
 };
 

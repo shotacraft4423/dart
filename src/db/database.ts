@@ -1,11 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type {
-  Player,
-  ExternalRatingEntry,
-  SkillCheckSession,
-  RatingSnapshot,
-  FormAnalysisSession,
-} from '../types/domain';
+import type { Player, ExternalRatingEntry, SkillCheckSession, FormAnalysisSession } from '../types/domain';
 
 interface DartsDB extends DBSchema {
   players: {
@@ -22,11 +16,6 @@ interface DartsDB extends DBSchema {
     value: SkillCheckSession;
     indexes: { 'by-player': string };
   };
-  ratingSnapshots: {
-    key: string;
-    value: RatingSnapshot;
-    indexes: { 'by-player': string };
-  };
   settings: {
     key: string;
     value: unknown;
@@ -39,7 +28,7 @@ interface DartsDB extends DBSchema {
 }
 
 const DB_NAME = 'darts-practice-tool';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase<DartsDB>> | null = null;
 
@@ -58,16 +47,19 @@ export function getDB(): Promise<IDBPDatabase<DartsDB>> {
           const store = db.createObjectStore('skillCheckSessions', { keyPath: 'id' });
           store.createIndex('by-player', 'playerId');
         }
-        if (!db.objectStoreNames.contains('ratingSnapshots')) {
-          const store = db.createObjectStore('ratingSnapshots', { keyPath: 'id' });
-          store.createIndex('by-player', 'playerId');
-        }
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings');
         }
         if (!db.objectStoreNames.contains('formSessions')) {
           const store = db.createObjectStore('formSessions', { keyPath: 'id' });
           store.createIndex('by-player', 'playerId');
+        }
+        // Rating history is now derived live from sessions/externalRatings
+        // (see lib/rating.ts) rather than logged, so deleting a session or
+        // rating entry can no longer leave a stale point behind.
+        const nativeDb = db as unknown as IDBDatabase;
+        if (nativeDb.objectStoreNames.contains('ratingSnapshots')) {
+          nativeDb.deleteObjectStore('ratingSnapshots');
         }
       },
     });
@@ -116,20 +108,6 @@ export const skillCheckSessionRepo = {
   },
   async delete(id: string): Promise<void> {
     await (await getDB()).delete('skillCheckSessions', id);
-  },
-};
-
-export const ratingSnapshotRepo = {
-  async listByPlayer(playerId: string): Promise<RatingSnapshot[]> {
-    const snapshots = await (await getDB()).getAllFromIndex(
-      'ratingSnapshots',
-      'by-player',
-      playerId,
-    );
-    return snapshots.sort((a, b) => a.date.localeCompare(b.date));
-  },
-  async put(snapshot: RatingSnapshot): Promise<void> {
-    await (await getDB()).put('ratingSnapshots', snapshot);
   },
 };
 

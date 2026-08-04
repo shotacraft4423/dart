@@ -85,6 +85,10 @@ export function GroupingTest() {
     window.location.reload();
   }
 
+  function handleUndo() {
+    setThrows((prev) => prev.slice(0, -1));
+  }
+
   if (metrics) {
     const biasX = metrics.groupingBiasX ?? 0;
     const biasY = metrics.groupingBiasY ?? 0;
@@ -107,6 +111,7 @@ export function GroupingTest() {
       highlightSegment={target}
       markers={throws.map((t) => ({ x: t.x ?? 0, y: t.y ?? 0 }))}
       throws={throws}
+      onUndo={handleUndo}
       statsPanel={
         <div className="stat-grid">
           <div className="stat-card">

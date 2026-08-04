@@ -266,7 +266,7 @@ export function CameraLandingPage() {
         </div>
       </div>
 
-      <div className="skillcheck-board" style={{ maxWidth: 340 }}>
+      <div className="skillcheck-board" style={{ maxWidth: 420 }}>
         <DartBoard markers={markers} disabled />
       </div>
     </div>

@@ -9,6 +9,22 @@ import type { BoardHitResult } from '../../lib/dartboardGeometry';
 
 const TARGETS = [...Array.from({ length: 20 }, (_, i) => i + 1), 25];
 
+function replay(throws: DartThrow[]) {
+  let targetIndex = 0;
+  let currentAttempts = 0;
+  for (const t of throws) {
+    if (targetIndex >= TARGETS.length) break;
+    const target = TARGETS[targetIndex];
+    if (t.segment === target && t.segment !== 0) {
+      targetIndex++;
+      currentAttempts = 0;
+    } else {
+      currentAttempts++;
+    }
+  }
+  return { targetIndex, currentAttempts };
+}
+
 export function AroundTheClock() {
   const { player } = usePlayer();
   const [session, setSession] = useState<SkillCheckSession | null>(null);
@@ -16,13 +32,11 @@ export function AroundTheClock() {
     if (player && !session) setSession(newSession(player.id, 'around_the_clock'));
   }, [player, session]);
   const [throws, setThrows] = useState<DartThrow[]>([]);
-  const [targetIndex, setTargetIndex] = useState(0);
-  const [attempts, setAttempts] = useState<number[]>([]);
-  const [currentAttempts, setCurrentAttempts] = useState(0);
   const [metrics, setMetrics] = useState<SkillCheckMetrics | null>(null);
 
   if (!player || !session) return <p>読み込み中...</p>;
 
+  const { targetIndex, currentAttempts } = replay(throws);
   const target = TARGETS[targetIndex];
   const finished = targetIndex >= TARGETS.length;
 
@@ -32,23 +46,19 @@ export function AroundTheClock() {
     const nextThrows = [...throws, t];
     setThrows(nextThrows);
 
-    if (hit.segment === target && hit.segment !== 0) {
-      const nextAttempts = [...attempts, currentAttempts + 1];
-      setAttempts(nextAttempts);
-      setCurrentAttempts(0);
-      const nextIndex = targetIndex + 1;
-      setTargetIndex(nextIndex);
-      if (nextIndex >= TARGETS.length) {
-        const m: SkillCheckMetrics = {
-          dartsThrown: nextThrows.length,
-          hitRate: rate(TARGETS.length, nextThrows.length),
-        };
-        setMetrics(m);
-        await finishSession(session!, nextThrows, m);
-      }
-    } else {
-      setCurrentAttempts((n) => n + 1);
+    const next = replay(nextThrows);
+    if (next.targetIndex >= TARGETS.length) {
+      const m: SkillCheckMetrics = {
+        dartsThrown: nextThrows.length,
+        hitRate: rate(TARGETS.length, nextThrows.length),
+      };
+      setMetrics(m);
+      await finishSession(session!, nextThrows, m);
     }
+  }
+
+  function handleUndo() {
+    setThrows((prev) => prev.slice(0, -1));
   }
 
   function restart() {
@@ -62,10 +72,11 @@ export function AroundTheClock() {
   return (
     <SkillCheckLayout
       title="Around the Clock"
-      instructions={`現在のターゲット: ${target === 25 ? 'ブル' : target} — 番号の順に1周狙いましょう（マルチプライヤーは問いません）`}
+      instructions={`現在のターゲット: ${target === 25 ? 'ブル' : target} — 番号の順に1周狙いましょう(マルチプライヤーは問いません)`}
       onHit={handleHit}
       highlightSegment={{ segment: target }}
       throws={throws}
+      onUndo={handleUndo}
       statsPanel={
         <div className="stat-grid">
           <div className="stat-card">

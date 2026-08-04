@@ -83,6 +83,16 @@ export function BoardLabPage() {
     });
   }
 
+  function handleUndoLabel() {
+    setLog((prev) => {
+      const idx = prev.findIndex((e) => e.label !== null);
+      if (idx === -1) return prev;
+      const next = [...prev];
+      next[idx] = { ...next[idx], label: null };
+      return next;
+    });
+  }
+
   function handleClearLog() {
     setLog([]);
     logIdRef.current = 0;
@@ -145,13 +155,16 @@ export function BoardLabPage() {
       </section>
 
       <div className="camera-body">
-        <div className="skillcheck-board" style={{ maxWidth: 340 }}>
+        <div className="skillcheck-board" style={{ maxWidth: 420 }}>
           <DartBoard onHit={handleLabelClick} disabled={unlabeledCount === 0} />
           <p className="camera-confidence" style={{ marginTop: 8 }}>
             {unlabeledCount > 0
               ? `未ラベルの信号が${unlabeledCount}件あります。実際に投げた位置をクリックすると、直近の未ラベル信号に自動でラベルが付きます。`
               : '未ラベルの信号はありません。ボードに信号を送らせてから(投擲して)クリックしてください。'}
           </p>
+          <button className="btn-link" onClick={handleUndoLabel} disabled={log.every((e) => e.label === null)}>
+            直前のラベル付けを取り消す
+          </button>
         </div>
 
         <div className="skillcheck-side">

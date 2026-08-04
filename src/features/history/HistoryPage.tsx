@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { skillCheckSessionRepo } from '../../db/database';
-import { refreshRatingSnapshot } from '../../lib/rating';
 import { SKILL_CHECK_META } from '../../lib/skillCheckMeta';
 import type { SkillCheckSession } from '../../types/domain';
 
@@ -32,7 +31,6 @@ export function HistoryPage() {
 
   async function handleDelete(id: string) {
     await skillCheckSessionRepo.delete(id);
-    await refreshRatingSnapshot(player!.id);
     await reload(player!.id);
   }
 
